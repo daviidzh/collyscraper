@@ -1,6 +1,65 @@
 package main
 
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"strconv"
+
+	"github.com/gocolly/colly"
+)
+
+type Fact struct {
+	ID          int    `json:"id"`
+	Description string `json:"description"`
+}
+
 func main() {
-	c := colly.newCollector()
-	c.Visit()
+	crawl()
+}
+
+func crawl() {
+	allFacts := make([]Fact, 0)
+	collector := colly.NewCollector(
+		colly.AllowedDomains("factretriever.com", "www.factretriever.com"),
+	)
+
+	collector.OnHTML(".factsList li", func(element *colly.HTMLElement) {
+		factId, err := strconv.Atoi(element.Attr("id"))
+		if err != nil {
+			log.Println("Could not get id")
+		}
+
+		factDesc := element.Text
+		fact := Fact{
+			ID:          factId,
+			Description: factDesc,
+		}
+
+		allFacts = append(allFacts, fact)
+	})
+
+	collector.OnRequest(func(request *colly.Request) {
+		fmt.Println("Visiting", request.URL.String())
+	})
+
+	collector.OnError(func(response *colly.Response, e error) {
+		fmt.Println("Got this error", e)
+	})
+
+	collector.Visit("https://www.factretriever.com/rhino-facts")
+
+	writeJSON(allFacts)
+
+}
+
+func writeJSON(data []Fact) {
+	file, err := json.MarshalIndent(data, "", " ")
+	if err != nil {
+		log.Println("Unable to create json file")
+		return
+	}
+
+	_ = ioutil.WriteFile("rinofacts.json", file, 0644)
 }
